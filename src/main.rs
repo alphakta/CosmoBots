@@ -1,45 +1,41 @@
 use bevy::prelude::*;
 
+
 fn main() {
     App::new()
     .add_plugins(DefaultPlugins)
     .add_systems(Startup, setup)
-    .insert_resource(ClearColor(Color::rgb(0.95, 0.62, 0.07)))
-    .add_systems(Startup, add_people)
+    .insert_resource(ClearColor(Color::rgb(0.95, 0.62, 0.)))
     .run();
  }
  
- fn hello_world() {
-    println!("hello world");
- }
-
  #[derive(Component)]
-struct Person;
+enum Robot {
+    Soil,
+    Water,
+    Rock
+}
 
 #[derive(Component)]
 struct Name(String);
 
-fn add_people(mut commands: Commands) {
-    commands.spawn((Person, Name("Elaina Proctor".to_string())));
-    commands.spawn((Person, Name("Renzo Hume".to_string())));
-    commands.spawn((Person, Name("Zayna Nieves".to_string())));
-}
-
-fn greet_people(query: Query<&Name, With<Person>>) {
-    for name in &query {
-        println!("hello {}!", name.0);
-    }
-}
-
-fn update_people(mut query: Query<&mut Name, With<Person>>) {
-    for mut name in &mut query {
-        if name.0 == "Elaina Proctor" {
-            name.0 = "Elaina Hume".to_string();
-            break; // We don’t need to change any other names
-        }
-    }
-}
 
 fn setup(mut commands: Commands) {
     commands.spawn(Camera2dBundle::default());
+
+    commands.spawn(SpriteBundle {
+        sprite: Sprite {
+            color: Color::rgb(0.5, 0.5, 0.5), 
+            custom_size: Some(Vec2::new(10.0, 10.0)), 
+            ..default()
+        },
+        transform: Transform::from_xyz(0.0, 0.0, 0.0), 
+        ..default()
+    });
+}
+
+fn add_robots(mut commands: Commands) {
+    commands.spawn((Robot::Soil, Name("Soil Robot".to_string())));
+    commands.spawn((Robot::Water, Name("Water Robot".to_string())));
+    commands.spawn((Robot::Rock, Name("Rock Robot".to_string())));
 }
