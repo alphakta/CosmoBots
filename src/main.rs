@@ -15,13 +15,8 @@ fn main() {
 pub struct RobotBundle {
     pub robot : Robot,
     pub transform: Transform,
-    pub global_transform: GlobalTransform,
-    pub texture: Handle<Image>,
-    pub visibility: Visibility,
-    pub inherited_visibility: InheritedVisibility,
-    pub view_visibility: ViewVisibility,
 }
- 
+
 enum RobotType {
     Soil,
     Water,
@@ -36,6 +31,7 @@ pub struct Robot {
     pub autonomy : i32,
     pub speciality : RobotType,
     pub custom_size: Option<Vec2>,
+    pub space : i32,
     pub flip_x: bool,
     pub flip_y: bool,
 } 
@@ -57,16 +53,6 @@ fn setup(mut commands: Commands) {
 
 fn add_robots(mut commands: Commands) {
 
-    commands.spawn(Robot{
-        color : Color::rgb(0.5, 0.5, 0.5),
-        custom_size: Some(Vec2::new(10.0, 10.0)),
-        speciality : RobotType::Soil,
-        name : "Soil Robot".to_string(),
-        durability : 10,
-        autonomy : 100,
-        flip_x : false,
-        flip_y : false
-    });
     commands.spawn(RobotBundle {
         robot : Robot{
         color : Color::rgb(0.5, 0.5, 0.5),
@@ -74,51 +60,40 @@ fn add_robots(mut commands: Commands) {
         speciality : RobotType::Soil,
         name : "Soil Robot".to_string(),
         durability : 10,
+        space: 100,
         autonomy : 100,
         flip_x : false,
         flip_y : false
         },
         transform : Transform::from_xyz(0.0, 0.0, 0.0),
-       ..default()
     });
-
-    commands.spawn(Robot{
+    commands.spawn(RobotBundle {
+        robot : Robot{
         color : Color::rgb(0.5, 0.5, 0.5),
         custom_size: Some(Vec2::new(10.0, 10.0)),
-        speciality : RobotType::Soil,
+        speciality : RobotType::Water,
         name : "Water Robot".to_string(),
-        durability : 30,
-        autonomy : 40,
+        durability : 10,
+        space: 100,
+        autonomy : 100,
         flip_x : false,
         flip_y : false
+        },
+        transform : Transform::from_xyz(-10.0, -10.0, 0.0),
     });
-    commands.spawn(Robot{
+    commands.spawn(RobotBundle {
+        robot : Robot{
         color : Color::rgb(0.5, 0.5, 0.5),
         custom_size: Some(Vec2::new(10.0, 10.0)),
-        speciality : RobotType::Soil,
+        speciality : RobotType::Rock,
         name : "Rock Robot".to_string(),
         durability : 10,
-        autonomy : 300,
+        space: 100,
+        autonomy : 100,
         flip_x : false,
         flip_y : false
+        },
+        transform : Transform::from_xyz(10.0, 10.0, 0.0),
     });
 
 }
-
-
-
-// fn check_mouse_clicks(
-//     mouse_button_input: Res<Input<MouseButton>>,
-//     mut cursor_moved_events: EventReader<CursorMoved>,
-// ) {
-//     // Vérifier si le bouton gauche de la souris a été pressé
-//     if mouse_button_input.just_pressed(MouseButton::Left) {
-//         println!("Mouse button left clicked!");
-
-//     }
-
-//     // Exemple pour détecter le mouvement de la souris
-//     for event in cursor_moved_events.iter() {
-//         println!("Cursor moved to: {:?}", event.position);
-//     }
-// }
