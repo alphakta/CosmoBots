@@ -1,16 +1,25 @@
 use bevy::prelude::*;
 // use bevy::input::mouse::{MouseButtonInput, MouseMotion, MouseWheel};
-use bevy::render::camera;
+// use bevy::render::camera;
+use bevy::utils::HashMap;
 
 
 fn main() {
     App::new()
     .add_plugins(DefaultPlugins)
+    .insert_resource(RobotMap::default())
     .add_systems(Startup, setup)
     .add_systems(Startup, add_robots)
     .insert_resource(ClearColor(Color::rgb(0.95, 0.62, 0.)))
     .run();
  }
+
+
+ #[derive(Default , Resource)]
+pub struct RobotMap {
+    pub robots: HashMap<RobotType, Vec<Entity>>,
+}
+
 
 #[derive(Component)]
 pub struct RobotBundle {
@@ -34,67 +43,46 @@ pub struct Robot {
 } 
 
 fn setup(mut commands: Commands) {
+    
 
     commands.spawn(Camera2dBundle::default());
 }
 
+fn create_robot(commands: &mut Commands, robot_type: RobotType) {
+    let color = match robot_type {
+        RobotType::Soil => Color::rgb(0.3, 0.4, 0.6),
+        RobotType::Water => Color::rgb(0.0, 0.0, 1.0),
+        RobotType::Rock => Color::rgb(0.5, 0.5, 0.5),
+    };
+
+    let name = match robot_type {
+        RobotType::Soil => "Soil Robot",
+        RobotType::Water => "Water Robot",
+        RobotType::Rock => "Rock Robot",
+    }.to_string();
+
+    commands.spawn(SpriteBundle {
+        sprite: Sprite {
+            color,
+            custom_size: Some(Vec2::new(10.0, 10.0)),
+            ..default()
+        },
+        ..default()
+    })
+    .insert(Robot {
+        name,
+        durability: 10,
+        autonomy: 100,
+        speciality: robot_type,
+        space: 100,
+    });
+}
+
 fn add_robots(mut commands: Commands) {
+    create_robot(&mut commands, RobotType::Soil);
+    create_robot(&mut commands, RobotType::Water);
+    create_robot(&mut commands, RobotType::Rock);
+}
+fn robot_mouvment(){
 
-    let water_robot_sprite = Sprite {
-        color: Color::rgb(0.0, 0.0, 1.0),
-        custom_size: Some(Vec2::new(10.0, 10.0)),
-        ..default()
-    };
-
-    let soil_robot_sprite = Sprite {
-        color: Color::rgb(0.3, 0.4, 0.6),
-        custom_size: Some(Vec2::new(10.0, 10.0)),
-        ..default()
-    };
-
-    let rock_robot_sprite = Sprite {
-        color: Color::rgb(0.5, 0.5, 0.5),
-        custom_size: Some(Vec2::new(10.0, 10.0)),
-        ..default()
-    };
-
-    commands.spawn(SpriteBundle {
-        sprite: soil_robot_sprite,
-        transform: Transform::from_xyz(-10.0, -10.0, 0.0),
-        ..default()
-    })
-    .insert(Robot {
-        name: "Soil Robot".to_string(),
-        durability: 10,
-        autonomy: 100,
-        speciality: RobotType::Soil,
-        space : 100
-    });
-
-    commands.spawn(SpriteBundle {
-        sprite: water_robot_sprite,
-        transform: Transform::from_xyz(0.0, 0.0, 0.0),
-        ..default()
-    })
-    .insert(Robot {
-        name: "Water Robot".to_string(),
-        durability: 10,
-        autonomy: 100,
-        speciality: RobotType::Water,
-        space : 100
-    });
-    commands.spawn(SpriteBundle {
-        sprite: rock_robot_sprite,
-        transform: Transform::from_xyz(10.0, 10.0, 0.0),
-        ..default()
-    })
-    .insert(Robot {
-        name: "Rock Robot".to_string(),
-        durability: 10,
-        autonomy: 100,
-        speciality: RobotType::Rock,
-        space : 100
-    });
-
-    
 }
