@@ -34,7 +34,7 @@ pub struct RobotBundle {
 pub enum RobotType {
     Soil,
     Water,
-    Rock,
+    Rock
 }
 
 #[derive(Component)]
