@@ -76,7 +76,7 @@ fn heuristic(x1: usize, y1: usize, x2: usize, y2: usize) -> usize {
 }
 
 fn main() -> GameResult {
-    let cb = ContextBuilder::new("CosmoBots", "Alpha")
+    let cb = ContextBuilder::new("CosmoBots", "Team CosmoBots")
         .window_setup(conf::WindowSetup::default().title("CosmoBots"))
         .window_mode(conf::WindowMode::default().dimensions(
             (MAP_SIZE as f32 * CELL_SIZE) + 1.0,
