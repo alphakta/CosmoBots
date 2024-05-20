@@ -33,7 +33,8 @@ lazy_static! {
     static ref ENERGY_COLOR: graphics::Color = graphics::Color::from_rgb(255, 255, 0);
     static ref MINERALS_COLOR: graphics::Color = graphics::Color::from_rgb(0, 0, 255);
     static ref SCIENCE_INTERESTS_COLOR: graphics::Color = graphics::Color::from_rgb(0, 255, 0);
-    static ref ROBOT_COLOR: graphics::Color = graphics::Color::from_rgb(255, 0, 0);
+    static ref ROBOT_EXPLORER_COLOR: graphics::Color = graphics::Color::from_rgb(255, 0, 0);
+    static ref ROBOT_EXTRACTOR_COLOR: graphics::Color = graphics::Color::from_rgb(255, 165, 0);
     static ref STATION_COLOR: graphics::Color = graphics::Color::from_rgb(0, 255, 255);
     static ref FOG_COLOR: graphics::Color = graphics::Color::from_rgb(0, 0, 0);
 }
@@ -77,6 +78,7 @@ struct Map {
     explored: [[bool; MAP_SIZE]; MAP_SIZE],
     fog_of_war: [[bool; MAP_SIZE]; MAP_SIZE],
     robot_explorer: Option<RobotExplorer>,
+    robot_extractor: Option<RobotExtractor>,
     update_timer: Duration,
     game_over: bool,
     nb_consumables: usize,
@@ -88,7 +90,7 @@ struct RobotExplorer {
     y: usize,
     station_x: usize,
     station_y: usize,
-    carrying_resource: bool,
+    founded_resource: bool,
 }
 
 struct RobotExtractor {
@@ -99,6 +101,18 @@ struct RobotExtractor {
     carrying_resource: bool,
 }
 
+impl RobotExtractor {
+    fn new(station_x: usize, station_y: usize) -> Self {
+        RobotExtractor {
+            x: station_x,
+            y: station_y,
+            station_x,
+            station_y,
+            carrying_resource: false,
+        }
+    }
+}
+
 impl RobotExplorer {
     fn new(station_x: usize, station_y: usize) -> Self {
         RobotExplorer {
@@ -106,7 +120,7 @@ impl RobotExplorer {
             y: station_y,
             station_x,
             station_y,
-            carrying_resource: false,
+            founded_resource: false,
         }
     }
 
@@ -147,19 +161,21 @@ impl RobotExplorer {
             }
 
             if map.energy[new_y][new_x] {
-                map.energy[new_y][new_x] = false;
-                self.carrying_resource = true;
+                // map.energy[new_y][new_x] = false;
+                self.founded_resource = true;
+                // self.carying_resource = true;
                 println!(
-                    "Collected energy at ({}, {}). Remaining: {}",
+                    "Founded energy at ({}, {}). Remaining: {}",
                     new_x,
                     new_y,
                     map.count_consumables()
                 );
             } else if map.minerals[new_y][new_x] {
-                map.minerals[new_y][new_x] = false;
-                self.carrying_resource = true;
+                // map.minerals[new_y][new_x] = false;
+                self.founded_resource = true;
+                // self.carying_resource = true;
                 println!(
-                    "Collected minerals at ({}, {}). Remaining: {}",
+                    "Founded minerals at ({}, {}). Remaining: {}",
                     new_x,
                     new_y,
                     map.count_consumables()
@@ -236,6 +252,7 @@ impl Map {
             explored: [[false; MAP_SIZE]; MAP_SIZE],
             fog_of_war: [[true; MAP_SIZE]; MAP_SIZE],
             robot_explorer: None, // Initialisez le robot à None pour l'instant
+            robot_extractor: None,
             update_timer: Duration::from_secs(1),
             game_over: false,
             nb_consumables: 0,
@@ -245,6 +262,7 @@ impl Map {
         // Initialisez la position du robot en appelant la fonction init_robot_position
         if let Some((x, y)) = map.init_robot_position() {
             map.robot_explorer = Some(RobotExplorer::new(x, y));
+            map.robot_extractor = Some(RobotExtractor::new(x, y));
             map.fog_of_war[y][x] = false;
         }
 
@@ -271,7 +289,7 @@ impl Map {
         }
     }
 
-    fn place_obstacles(&mut self, resources: &[(usize, usize)]) {
+    fn place_obstacles(&mut self, _resources: &[(usize, usize)]) {
         let mut rng = rand::thread_rng();
         let seed = rng.gen();
         let fbm_obstacles = Fbm::<Perlin>::new(seed);
@@ -326,7 +344,8 @@ impl Map {
             // Si toutes les ressources sont collectées, mais avant de finir le jeu, le robot retourne à la station
             let all_resources_collected = self.count_consumables() == 0 || self.is_map_empty();
 
-            if all_resources_collected && !robot.carrying_resource {
+            // if all_resources_collected && !robot.carrying_resource {
+            if all_resources_collected {
                 if let Some(path) = robot.return_to_station(&self.obstacles) {
                     if path.len() > 1 {
                         // Obtenez la prochaine cellule dans le chemin
@@ -341,7 +360,7 @@ impl Map {
                     }
                 }
             } else {
-                if robot.carrying_resource {
+                if robot.founded_resource {
                     if let Some(path) = robot.return_to_station(&self.obstacles) {
                         if path.len() > 1 {
                             // Obtenez la prochaine cellule dans le chemin
@@ -350,8 +369,11 @@ impl Map {
                             robot.y = next_y;
 
                             if robot.x == robot.station_x && robot.y == robot.station_y {
-                                robot.carrying_resource = false; // Déposer la ressource à la station
-                                println!("Resource delivered to the station.");
+                                robot.founded_resource = false; // J'ai trouvé une ressource, je retourne à la station en informer le robot extracteur
+                                println!(
+                                    "Robot returned to the station. Carrying resource: {}",
+                                    robot.founded_resource
+                                );
                             }
                         }
                     } else {
@@ -452,7 +474,23 @@ impl event::EventHandler for Map {
                 ctx,
                 graphics::DrawMode::fill(),
                 robot_rect,
-                *ROBOT_COLOR,
+                *ROBOT_EXPLORER_COLOR,
+            )?;
+            graphics::draw(ctx, &robot_mesh, graphics::DrawParam::default())?;
+        }
+
+        if let Some(robot) = &self.robot_extractor {
+            let robot_rect = graphics::Rect::new(
+                robot.x as f32 * CELL_SIZE,
+                robot.y as f32 * CELL_SIZE,
+                CELL_SIZE,
+                CELL_SIZE,
+            );
+            let robot_mesh = graphics::Mesh::new_rectangle(
+                ctx,
+                graphics::DrawMode::fill(),
+                robot_rect,
+                *ROBOT_EXTRACTOR_COLOR,
             )?;
             graphics::draw(ctx, &robot_mesh, graphics::DrawParam::default())?;
         }
