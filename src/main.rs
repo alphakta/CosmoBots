@@ -91,6 +91,8 @@ struct RobotExplorer {
     station_x: usize,
     station_y: usize,
     founded_resource: bool,
+    resource_position: Option<(usize, usize)>,
+    waiting: bool, // Nouvel état
 }
 
 struct RobotExtractor {
@@ -99,6 +101,8 @@ struct RobotExtractor {
     station_x: usize,
     station_y: usize,
     carrying_resource: bool,
+    target_position: Option<(usize, usize)>,
+    waiting: bool, // Nouvel état
 }
 
 impl RobotExtractor {
@@ -109,7 +113,73 @@ impl RobotExtractor {
             station_x,
             station_y,
             carrying_resource: false,
+            target_position: None,
+            waiting: false, // Initialisation
         }
+    }
+
+    fn move_towards(
+        &mut self,
+        target_x: usize,
+        target_y: usize,
+        obstacles: &[[bool; MAP_SIZE]; MAP_SIZE],
+    ) -> Option<Vec<(usize, usize)>> {
+        let start = (self.x, self.y);
+        let goal = (target_x, target_y);
+
+        let mut open_list = BinaryHeap::new();
+        let mut came_from = HashMap::new();
+        let mut g_score = vec![vec![usize::MAX; MAP_SIZE]; MAP_SIZE];
+        let mut f_score = vec![vec![usize::MAX; MAP_SIZE]; MAP_SIZE];
+
+        g_score[start.1][start.0] = 0;
+        f_score[start.1][start.0] = heuristic(start.0, start.1, goal.0, goal.1);
+
+        open_list.push(Node::new(start.0, start.1, 0, f_score[start.1][start.0]));
+
+        while let Some(current) = open_list.pop() {
+            if current.x == goal.0 && current.y == goal.1 {
+                let mut path = vec![];
+                let mut current_pos = (current.x, current.y);
+                while let Some(&prev) = came_from.get(&current_pos) {
+                    path.push(current_pos);
+                    current_pos = prev;
+                }
+                path.push(start);
+                path.reverse();
+                return Some(path);
+            }
+
+            for &(dx, dy) in &DIRECTIONS {
+                let neighbor_x =
+                    (current.x as isize + dx).max(0).min(MAP_SIZE as isize - 1) as usize;
+                let neighbor_y =
+                    (current.y as isize + dy).max(0).min(MAP_SIZE as isize - 1) as usize;
+                if obstacles[neighbor_y][neighbor_x] {
+                    continue;
+                }
+                let tentative_g_score = g_score[current.y][current.x] + 1;
+                if tentative_g_score < g_score[neighbor_y][neighbor_x] {
+                    came_from.insert((neighbor_x, neighbor_y), (current.x, current.y));
+                    g_score[neighbor_y][neighbor_x] = tentative_g_score;
+                    f_score[neighbor_y][neighbor_x] =
+                        tentative_g_score + heuristic(neighbor_x, neighbor_y, goal.0, goal.1);
+                    open_list.push(Node::new(
+                        neighbor_x,
+                        neighbor_y,
+                        tentative_g_score,
+                        f_score[neighbor_y][neighbor_x],
+                    ));
+                }
+            }
+        }
+
+        None
+    }
+
+    fn collect_resource(&mut self) {
+        self.carrying_resource = true;
+        println!("Collected resource at ({}, {})", self.x, self.y);
     }
 }
 
@@ -121,6 +191,8 @@ impl RobotExplorer {
             station_x,
             station_y,
             founded_resource: false,
+            resource_position: None,
+            waiting: false, // Initialisation
         }
     }
 
@@ -161,9 +233,8 @@ impl RobotExplorer {
             }
 
             if map.energy[new_y][new_x] {
-                // map.energy[new_y][new_x] = false;
                 self.founded_resource = true;
-                // self.carying_resource = true;
+                self.resource_position = Some((new_x, new_y)); // Ajouter cette ligne
                 println!(
                     "Founded energy at ({}, {}). Remaining: {}",
                     new_x,
@@ -171,9 +242,8 @@ impl RobotExplorer {
                     map.count_consumables()
                 );
             } else if map.minerals[new_y][new_x] {
-                // map.minerals[new_y][new_x] = false;
                 self.founded_resource = true;
-                // self.carying_resource = true;
+                self.resource_position = Some((new_x, new_y)); // Ajouter cette ligne
                 println!(
                     "Founded minerals at ({}, {}). Remaining: {}",
                     new_x,
@@ -338,54 +408,96 @@ impl Map {
             return;
         }
 
-        if let Some(mut robot) = self.robot_explorer.take() {
-            let mut rng = rand::thread_rng();
-
-            // Si toutes les ressources sont collectées, mais avant de finir le jeu, le robot retourne à la station
-            let all_resources_collected = self.count_consumables() == 0 || self.is_map_empty();
-
-            // if all_resources_collected && !robot.carrying_resource {
-            if all_resources_collected {
-                if let Some(path) = robot.return_to_station(&self.obstacles) {
-                    if path.len() > 1 {
-                        // Obtenez la prochaine cellule dans le chemin
-                        let (next_x, next_y) = path[1]; // Utilisez path[1] pour la prochaine cellule
-                        robot.x = next_x;
-                        robot.y = next_y;
-
-                        if robot.x == robot.station_x && robot.y == robot.station_y {
-                            self.game_over = true;
-                            println!("Game Over: Robot returned to the station. All resources have been collected.");
-                        }
-                    }
-                }
-            } else {
-                if robot.founded_resource {
-                    if let Some(path) = robot.return_to_station(&self.obstacles) {
+        if let Some(mut extractor) = self.robot_extractor.take() {
+            if !extractor.waiting {
+                if extractor.carrying_resource {
+                    if let Some(path) = extractor.move_towards(
+                        extractor.station_x,
+                        extractor.station_y,
+                        &self.obstacles,
+                    ) {
                         if path.len() > 1 {
-                            // Obtenez la prochaine cellule dans le chemin
-                            let (next_x, next_y) = path[1]; // Utilisez path[1] pour la prochaine cellule
-                            robot.x = next_x;
-                            robot.y = next_y;
+                            let (next_x, next_y) = path[1];
+                            extractor.x = next_x;
+                            extractor.y = next_y;
 
-                            if robot.x == robot.station_x && robot.y == robot.station_y {
-                                robot.founded_resource = false; // J'ai trouvé une ressource, je retourne à la station en informer le robot extracteur
-                                println!(
-                                    "Robot returned to the station. Carrying resource: {}",
-                                    robot.founded_resource
-                                );
+                            if extractor.x == extractor.station_x
+                                && extractor.y == extractor.station_y
+                            {
+                                extractor.carrying_resource = false;
+                                extractor.waiting = true; // Extractor attend maintenant
+                                if let Some(mut explorer) = self.robot_explorer.as_mut() {
+                                    explorer.waiting = false; // L'explorer peut maintenant bouger
+                                }
+                                println!("Extractor returned to the station with resource.");
                             }
                         }
-                    } else {
-                        robot.move_random(&mut rng, self); // Aucun chemin trouvé, se déplacer aléatoirement
                     }
-                } else {
-                    robot.move_random(&mut rng, self); // Le robot ne porte pas de ressource, se déplacer aléatoirement
+                } else if let Some((target_x, target_y)) = extractor.target_position {
+                    if let Some(path) = extractor.move_towards(target_x, target_y, &self.obstacles)
+                    {
+                        if path.len() > 1 {
+                            let (next_x, next_y) = path[1];
+                            extractor.x = next_x;
+                            extractor.y = next_y;
+
+                            if extractor.x == target_x && extractor.y == target_y {
+                                extractor.collect_resource();
+                                self.energy[target_y][target_x] = false;
+                                self.minerals[target_y][target_x] = false;
+                            }
+                        }
+                    }
                 }
             }
+            self.robot_extractor = Some(extractor);
+        }
 
-            // Mettre à jour le statut du robot
-            self.robot_explorer = if self.game_over { None } else { Some(robot) };
+        if let Some(mut explorer) = self.robot_explorer.take() {
+            if !explorer.waiting {
+                let mut rng = rand::thread_rng();
+
+                let all_resources_collected = self.count_consumables() == 0 || self.is_map_empty();
+
+                if all_resources_collected {
+                    if let Some(path) = explorer.return_to_station(&self.obstacles) {
+                        if path.len() > 1 {
+                            let (next_x, next_y) = path[1];
+                            explorer.x = next_x;
+                            explorer.y = next_y;
+
+                            if explorer.x == explorer.station_x && explorer.y == explorer.station_y
+                            {
+                                self.game_over = true;
+                                println!("Game Over: Robot returned to the station. All resources have been collected.");
+                            }
+                        }
+                    }
+                } else if explorer.founded_resource {
+                    if let Some((resource_x, resource_y)) = explorer.resource_position {
+                        if explorer.x == explorer.station_x && explorer.y == explorer.station_y {
+                            self.robot_extractor.as_mut().unwrap().target_position =
+                                Some((resource_x, resource_y));
+                            explorer.founded_resource = false;
+                            explorer.resource_position = None;
+                            explorer.waiting = true; // Explorer attend maintenant
+                            if let Some(mut extractor) = self.robot_extractor.as_mut() {
+                                extractor.waiting = false; // L'extractor peut maintenant bouger
+                            }
+                            println!("Explorer returned to the station and provided resource position to Extractor.");
+                        } else if let Some(path) = explorer.return_to_station(&self.obstacles) {
+                            if path.len() > 1 {
+                                let (next_x, next_y) = path[1];
+                                explorer.x = next_x;
+                                explorer.y = next_y;
+                            }
+                        }
+                    }
+                } else {
+                    explorer.move_random(&mut rng, self);
+                }
+            }
+            self.robot_explorer = Some(explorer);
         }
     }
 
