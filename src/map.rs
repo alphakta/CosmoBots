@@ -126,6 +126,7 @@ impl Map {
                         extractor.station_x,
                         extractor.station_y,
                         &self.obstacles,
+                        &self.fog_of_war,
                     ) {
                         if path.len() > 1 {
                             let (next_x, next_y) = path[1];
@@ -145,8 +146,12 @@ impl Map {
                         }
                     }
                 } else if let Some((target_x, target_y)) = extractor.target_position {
-                    if let Some(path) = extractor.move_towards(target_x, target_y, &self.obstacles)
-                    {
+                    if let Some(path) = extractor.move_towards(
+                        target_x,
+                        target_y,
+                        &self.obstacles,
+                        &self.fog_of_war,
+                    ) {
                         if path.len() > 1 {
                             let (next_x, next_y) = path[1];
                             extractor.x = next_x;
@@ -171,7 +176,9 @@ impl Map {
                 let all_resources_collected = self.count_consumables() == 0 || self.is_map_empty();
 
                 if all_resources_collected {
-                    if let Some(path) = explorer.return_to_station(&self.obstacles) {
+                    if let Some(path) =
+                        explorer.return_to_station(&self.obstacles, &self.fog_of_war)
+                    {
                         if path.len() > 1 {
                             let (next_x, next_y) = path[1];
                             explorer.x = next_x;
@@ -196,7 +203,9 @@ impl Map {
                                 extractor.waiting = false;
                             }
                             println!("Explorer returned to the station and provided resource position to Extractor.");
-                        } else if let Some(path) = explorer.return_to_station(&self.obstacles) {
+                        } else if let Some(path) =
+                            explorer.return_to_station(&self.obstacles, &self.fog_of_war)
+                        {
                             if path.len() > 1 {
                                 let (next_x, next_y) = path[1];
                                 explorer.x = next_x;
@@ -231,6 +240,16 @@ impl event::EventHandler for Map {
     fn draw(&mut self, ctx: &mut Context) -> GameResult {
         graphics::clear(ctx, graphics::WHITE);
 
+        let explorer = self.robot_explorer.as_ref().unwrap();
+        let extractor = self.robot_extractor.as_ref().unwrap();
+
+        let explorer_at_station =
+            explorer.x == explorer.station_x && explorer.y == explorer.station_y;
+        let extractor_at_station =
+            extractor.x == extractor.station_x && extractor.y == extractor.station_y;
+
+        let all_resources_collected = self.count_consumables() == 0;
+
         for y in 0..MAP_SIZE {
             for x in 0..MAP_SIZE {
                 let rect = graphics::Rect::new(
@@ -239,8 +258,9 @@ impl event::EventHandler for Map {
                     CELL_SIZE as f32,
                     CELL_SIZE as f32,
                 );
-                let cell_color = if self.robot_explorer.as_ref().unwrap().station_x == x
-                    && self.robot_explorer.as_ref().unwrap().station_y == y
+                let cell_color = if all_resources_collected
+                    && explorer.station_x == x
+                    && explorer.station_y == y
                 {
                     STATION_COLOR
                 } else if self.obstacles[y][x] {
@@ -251,14 +271,6 @@ impl event::EventHandler for Map {
                     MINERALS_COLOR
                 } else if self.science_interests[y][x] {
                     SCIENCE_INTERESTS_COLOR
-                } else if self.robot_explorer.as_ref().unwrap().x == x
-                    && self.robot_explorer.as_ref().unwrap().y == y
-                {
-                    ROBOT_EXPLORER_COLOR
-                } else if self.robot_extractor.as_ref().unwrap().x == x
-                    && self.robot_extractor.as_ref().unwrap().y == y
-                {
-                    ROBOT_EXTRACTOR_COLOR
                 } else {
                     DEFAULT_COLOR
                 };
@@ -278,6 +290,30 @@ impl event::EventHandler for Map {
                 graphics::draw(ctx, &cell, graphics::DrawParam::default())?;
             }
         }
+
+        let explorer_x = explorer.x as f32 * CELL_SIZE as f32 + CELL_SIZE as f32 / 2.0;
+        let explorer_y = explorer.y as f32 * CELL_SIZE as f32 + CELL_SIZE as f32 / 2.0;
+        let explorer_circle = graphics::Mesh::new_circle(
+            ctx,
+            graphics::DrawMode::fill(),
+            [explorer_x, explorer_y],
+            CELL_SIZE as f32 / 2.0,
+            1.0,
+            ROBOT_EXPLORER_COLOR,
+        )?;
+        graphics::draw(ctx, &explorer_circle, graphics::DrawParam::default())?;
+
+        let extractor_x = extractor.x as f32 * CELL_SIZE as f32 + CELL_SIZE as f32 / 2.0;
+        let extractor_y = extractor.y as f32 * CELL_SIZE as f32 + CELL_SIZE as f32 / 2.0;
+        let extractor_circle = graphics::Mesh::new_circle(
+            ctx,
+            graphics::DrawMode::fill(),
+            [extractor_x, extractor_y],
+            CELL_SIZE as f32 / 2.0,
+            1.0,
+            ROBOT_EXTRACTOR_COLOR,
+        )?;
+        graphics::draw(ctx, &extractor_circle, graphics::DrawParam::default())?;
 
         graphics::present(ctx)?;
         Ok(())
