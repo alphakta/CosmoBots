@@ -41,6 +41,7 @@ impl RobotExtractor {
         target_x: usize,
         target_y: usize,
         obstacles: &[[bool; MAP_SIZE]; MAP_SIZE],
+        fog_of_war: &[[bool; MAP_SIZE]; MAP_SIZE],
     ) -> Option<Vec<(usize, usize)>> {
         let start = (self.x, self.y);
         let goal = (target_x, target_y);
@@ -73,7 +74,7 @@ impl RobotExtractor {
                     (current.x as isize + dx).max(0).min(MAP_SIZE as isize - 1) as usize;
                 let neighbor_y =
                     (current.y as isize + dy).max(0).min(MAP_SIZE as isize - 1) as usize;
-                if obstacles[neighbor_y][neighbor_x] {
+                if obstacles[neighbor_y][neighbor_x] || fog_of_war[neighbor_y][neighbor_x] {
                     continue;
                 }
                 let tentative_g_score = g_score[current.y][current.x] + 1;
@@ -120,6 +121,12 @@ impl RobotExplorer {
         for &(dx, dy) in &DIRECTIONS {
             let new_x = (self.x as isize + dx).max(0).min(MAP_SIZE as isize - 1) as usize;
             let new_y = (self.y as isize + dy).max(0).min(MAP_SIZE as isize - 1) as usize;
+
+            // Ne pas ajouter la station comme un mouvement possible
+            if (new_x, new_y) == (self.station_x, self.station_y) {
+                continue;
+            }
+
             if !map.obstacles[new_y][new_x] && !map.explored[new_y][new_x] {
                 possible_moves.push((new_x, new_y));
             }
@@ -129,6 +136,12 @@ impl RobotExplorer {
             for &(dx, dy) in &DIRECTIONS {
                 let new_x = (self.x as isize + dx).max(0).min(MAP_SIZE as isize - 1) as usize;
                 let new_y = (self.y as isize + dy).max(0).min(MAP_SIZE as isize - 1) as usize;
+
+                // Ne pas ajouter la station comme un mouvement possible
+                if (new_x, new_y) == (self.station_x, self.station_y) {
+                    continue;
+                }
+
                 if !map.obstacles[new_y][new_x] {
                     possible_moves.push((new_x, new_y));
                 }
@@ -152,12 +165,12 @@ impl RobotExplorer {
 
             if map.energy[new_y][new_x] {
                 self.founded_resource = true;
-                self.resource_position = Some((new_x, new_y)); // Ajouter cette ligne
-                println!("Founded energy at ({}, {}).", new_x, new_y,);
+                self.resource_position = Some((new_x, new_y));
+                println!("Founded energy at ({}, {}).", new_x, new_y);
             } else if map.minerals[new_y][new_x] {
                 self.founded_resource = true;
-                self.resource_position = Some((new_x, new_y)); // Ajouter cette ligne
-                println!("Founded minerals at ({}, {}).", new_x, new_y,);
+                self.resource_position = Some((new_x, new_y));
+                println!("Founded minerals at ({}, {}).", new_x, new_y);
             }
         }
     }
@@ -165,6 +178,7 @@ impl RobotExplorer {
     pub fn return_to_station(
         &mut self,
         obstacles: &[[bool; MAP_SIZE]; MAP_SIZE],
+        fog_of_war: &[[bool; MAP_SIZE]; MAP_SIZE],
     ) -> Option<Vec<(usize, usize)>> {
         let start = (self.x, self.y);
         let goal = (self.station_x, self.station_y);
@@ -197,7 +211,7 @@ impl RobotExplorer {
                     (current.x as isize + dx).max(0).min(MAP_SIZE as isize - 1) as usize;
                 let neighbor_y =
                     (current.y as isize + dy).max(0).min(MAP_SIZE as isize - 1) as usize;
-                if obstacles[neighbor_y][neighbor_x] {
+                if obstacles[neighbor_y][neighbor_x] || fog_of_war[neighbor_y][neighbor_x] {
                     continue;
                 }
                 let tentative_g_score = g_score[current.y][current.x] + 1;
